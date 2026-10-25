@@ -1,25 +1,17 @@
 import os
 import pathlib
-import shutil
-import tarfile
 import tempfile
-import urllib
 from typing import List, Union
 
 import pandas as pd
 
 
 def download_diamond() -> str:
-    cache_dir = os.path.join(str(pathlib.Path.home()), ".cache")
-    if not os.path.exists(os.path.join(cache_dir, "diamond")):
-        fname = os.path.join(cache_dir, "diamond.tar.gz")
-        urllib.request.urlretrieve(
-            "https://github.com/bbuchfink/diamond/releases/download/v2.1.9/diamond-linux64.tar.gz", fname
-        )  # nosec
-        with tarfile.open(fname, "r:gz") as f:
-            f.extractall(cache_dir)  # nosec
-        os.remove(fname)
-    return os.path.join(cache_dir, "diamond")
+    root = next(p for p in pathlib.Path(__file__).resolve().parents if (p / "scripts/install_external_tools.sh").is_file())
+    diamond = os.environ.get("DIAMOND_BIN", str(root / "external/diamond-2.1.9/diamond"))
+    if not os.path.isfile(diamond):
+        raise FileNotFoundError(f"Missing DIAMOND executable: {diamond}. Run: bash scripts/install_external_tools.sh")
+    return diamond
 
 
 def seqs_to_fasta(seqs: List[str], fname: str):
