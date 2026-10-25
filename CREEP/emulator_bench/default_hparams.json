@@ -1,0 +1,47 @@
+{
+  "_source": "CARE/task2_baselines/CREEP/step_01_train_CREEP.py (argparse defaults, lines 190-224) and step_02_extract_CREEP.py. The CARE paper PDF is not in the submodule; README.md and the released code are the source.",
+  "seeds": {"value": [666, 777, 888], "source": "Leak-CURBER protocol (three seeds); the original script default is 42 (step_01 line 191)"},
+  "train": {
+    "epochs": {"value": 40, "source": "step_01 line 192; task2_baselines/README.md (40 epochs, about 36 h on one H100)"},
+    "batch_size": {"value": 16, "source": "step_01 line 193; one anchor EC plus 15 negative ECs per step"},
+    "num_workers": {"value": 0, "source": "step_01 line 194"},
+    "SSL_emb_dim": {"value": 256, "source": "step_01 line 195"},
+    "protein_backbone_model": {"value": "ProtT5", "source": "step_01 lines 198, 247-249 (Rostlab/prot_t5_xl_half_uniref50-enc)"},
+    "text_backbone_model": {"value": "SciBERT", "source": "step_01 lines 199, 252-253 (allenai/scibert_scivocab_uncased)"},
+    "reaction_backbone_model": {"value": "rxnfp", "source": "step_01 lines 200, 257-258 (CREEP/data/pretrained_rxnfp)"},
+    "protein_max_sequence_len": {"value": 512, "source": "step_01 line 201"},
+    "text_max_sequence_len": {"value": 512, "source": "step_01 line 202"},
+    "reaction_max_sequence_len": {"value": 512, "source": "step_01 line 203"},
+    "protein_lr": {"value": 1e-5, "source": "step_01 line 204"},
+    "protein_lr_scale": {"value": 1, "source": "step_01 line 205"},
+    "text_lr": {"value": 1e-5, "source": "step_01 line 206"},
+    "text_lr_scale": {"value": 0.1, "source": "step_01 line 207"},
+    "reaction_lr": {"value": 1e-5, "source": "step_01 line 208"},
+    "reaction_lr_scale": {"value": 1, "source": "step_01 line 209"},
+    "CL_neg_samples": {"value": 1, "source": "step_01 line 210"},
+    "CL_loss": {"value": "EBM_NCE", "source": "step_01 line 211"},
+    "T": {"value": 0.1, "source": "step_01 line 212"},
+    "decay": {"value": 0, "source": "step_01 line 213 (Adam weight_decay, line 292)"},
+    "use_three_modalities": {"value": true, "source": "step_01 line 216"},
+    "alpha_contrastive": {"value": 1, "source": "step_01 line 217"},
+    "alpha_generative": {"value": 0, "source": "step_01 line 218"},
+    "normalize": {"value": false, "source": "step_01 line 221"},
+    "verbose": {"value": false, "source": "step_01 line 223"},
+    "optimizer": {"value": "Adam, one parameter group per module, no scheduler", "source": "step_01 lines 282-292"},
+    "precision": {"value": "fp16 autocast with GradScaler on CUDA", "source": "step_01 lines 116, 133"},
+    "model_selection": {"value": "lowest mean training loss of an epoch (no validation set)", "source": "step_01 lines 179-183"}
+  },
+  "extract": {
+    "batch_size": {"value": 256, "source": "step_02 line 54"},
+    "precision": {"value": "fp16 autocast", "source": "step_02 lines 23, 35-36"},
+    "similarity": {"value": "cosine, zero norms replaced by 1", "source": "downstream_retrieval.py (similarity loop)"},
+    "ranking": {"value": "rank by descending similarity", "source": "rank_tabulate_similarities.py"},
+    "query_modality": {"value": "reaction", "source": "task2_baselines/README.md (CREEP reaction to protein)"},
+    "reference": {"value": "mean protein embedding per EC number", "source": "step_02 lines 226-250 (get_cluster_centers)"}
+  },
+  "mmseqs50": {
+    "min_seq_id": {"value": 0.5, "source": "generate_datasets_splits/rawdata_processing.ipynb (clusterRes50)"},
+    "coverage": {"value": 0.8, "source": "same notebook, -c 0.8"},
+    "cov_mode": {"value": 0, "source": "same notebook, --cov-mode 0"}
+  }
+}

@@ -1,0 +1,48 @@
+# Run every command from the submodule root: <EMULaToR>/baselines/CARE
+# $PY is the creep env: python 3.10, torch 2.2.0, transformers 4.39.1 (transformers 5 breaks the rxnfp tokenizer).
+#   conda create -n creep python=3.10; pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cu121
+#   pip install transformers==4.39.1 'numpy<2' pandas pyarrow sentencepiece protobuf 'setuptools<81' tqdm
+# mmseqs must be on PATH (or pass --mmseqs /path/to/mmseqs).
+cd /home/adhil/github/EMULaToR/baselines/CARE
+export PY=/home/adhil/.conda/envs/creep/bin/python
+OUT=../../outputs/baselines/CREEP
+
+# 1. EC descriptions used as the CREEP text modality (small file, needed once)
+mkdir -p $OUT/reference
+curl -o $OUT/reference/ec2go https://current.geneontology.org/ontology/external2go/ec2go
+
+# 2. List the runs that the launcher finds (no work is done)
+$PY CREEP/emulator_bench/queue_pipeline.py --dry_run
+
+# 3. All split folders x seeds 666 777 888 (train, then evaluate), 3 GPUs, 1 run per GPU.
+#    Add --low_memory on a 24 GB GPU (same numbers, about 21 GiB, one run per GPU; the original needs about 70 GiB). Add --amp for bf16.  The candidate pool is all split proteins by default (--reference all); --reference train keeps train proteins only. ProtT5 and SciBERT download into $OUT/pretrained on the first run.
+$PY CREEP/emulator_bench/queue_pipeline.py --gpus 0 1 2 --runs_per_gpu 1
+
+# Fast path (bf16, SDPA, dynamic padding, Adam in backward; Ampere or newer):
+#    $PY CREEP/emulator_bench/queue_pipeline.py --gpus 0 1 2 --fast
+
+# Frozen encoders (user decision 2026-10-24: ProtT5, SciBERT and rxnfp are not fine-tuned; only the three heads train).
+#    Step 1 caches each unique sequence, reaction and EC text once (resumable, fp32). Several GPUs: one shard per GPU.
+#    Step 2 trains the heads on the cached vectors and evaluates. Results go to $OUT/enzyme_retrieval_frozen.
+$PY CREEP/emulator_bench/queue_pipeline.py --frozen --gpus 0 1 2 --runs_per_gpu 2
+#    Cache only (one process per GPU, here two shards):
+#    CUDA_VISIBLE_DEVICES=0 $PY CREEP/emulator_bench/cache_frozen.py --shard 0 --shards 2
+#    CUDA_VISIBLE_DEVICES=1 $PY CREEP/emulator_bench/cache_frozen.py --shard 1 --shards 2
+#    One split and one seed by hand:
+#    $PY CREEP/emulator_bench/train_frozen.py --split random_splits_grouped_rxn_key/all --seed 666
+#    $PY CREEP/emulator_bench/evaluate.py --frozen --split random_splits_grouped_rxn_key/all --seed 666
+#    Summary: $PY CREEP/emulator_bench/aggregate_results.py --frozen
+#    Equivalence of the frozen path with the original code (backbones frozen), one visible GPU:
+#    CUDA_VISIBLE_DEVICES=1 $PY CREEP/emulator_bench/equivalence_frozen.py --mode fp32 --work_dir /tmp/creep_frozen_equiv
+#    CUDA_VISIBLE_DEVICES=1 $PY CREEP/emulator_bench/equivalence_frozen.py --mode production --heads fp16 --max_gb 20 --work_dir /tmp/creep_frozen_equiv
+
+# 4. Rebuild the summary CSVs from the saved predictions
+$PY CREEP/emulator_bench/aggregate_results.py
+
+# One split and one seed by hand
+$PY CREEP/emulator_bench/train.py    --split random_splits_grouped_rxn_key/all --seed 666
+$PY CREEP/emulator_bench/evaluate.py --split random_splits_grouped_rxn_key/all --seed 666
+
+# Smoke test and equivalence check (CPU only, tiny data, scratch folder)
+CUDA_VISIBLE_DEVICES= $PY CREEP/emulator_bench/smoke_test.py       --work_dir /tmp/creep_smoke --ec2go $OUT/reference/ec2go
+CUDA_VISIBLE_DEVICES= $PY CREEP/emulator_bench/equivalence_check.py --work_dir /tmp/creep_equiv --ec2go $OUT/reference/ec2go
