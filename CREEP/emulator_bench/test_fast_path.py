@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import shutil
 from pathlib import Path
 
 import pandas as pd
@@ -13,18 +12,18 @@ import torch.nn as nn
 from transformers import BertConfig, BertModel, T5Config, T5EncoderModel
 from transformers.models.t5.modeling_t5 import T5Attention, T5DenseActDense
 
+import common
 import train
-from common import DEFAULT_DATASET_ROOT, DEFAULT_OUT_ROOT
 from model_utils import (
     BackwardAdam,
     dense_act_dense_forward,
     sdpa_t5_attention,
     trim_padding,
 )
-from testing import make_tiny_dataset, tiny_backbones
+from testing import FIXTURES, make_tiny_dataset, tiny_backbones
 
-SOURCE = DEFAULT_DATASET_ROOT / "with_protein_information/random_splits_grouped_rxn_key"
-EC2GO = DEFAULT_OUT_ROOT / "reference" / "ec2go"
+SOURCE = FIXTURES / "dataset/with_protein_information/random_splits_grouped_rxn_key"
+EC2GO = FIXTURES / "ec2go"
 
 
 @pytest.fixture(autouse=True)
@@ -159,10 +158,11 @@ def test_backward_adam_resume_reproduces_next_steps():
 
 @pytest.fixture(scope="module")
 def tiny_data(tmp_path_factory):
-    if not (SOURCE.exists() and EC2GO.exists() and shutil.which("mmseqs")):
-        pytest.skip("needs the dataset, the ec2go file and mmseqs")
     work = tmp_path_factory.mktemp("fast")
-    return work, make_tiny_dataset(SOURCE, work / "data")
+    with pytest.MonkeyPatch.context() as patch:
+        # One cluster per sequence stands in for mmseqs, which is an external tool.
+        patch.setattr(common, "mmseqs_clusters", lambda seqs, *a: {s: i for i, s in enumerate(seqs)})
+        yield work, make_tiny_dataset(SOURCE, work / "data", sizes=(96, 24, 48))
 
 
 def run_fast(tiny_data, out: str, epochs: int, device: torch.device) -> Path:
@@ -193,6 +193,7 @@ def test_fast_train_and_resume_on_cpu(tiny_data, monkeypatch):
     assert all(torch.equal(a[k], b[k]) for k in a)
 
 
+@pytest.mark.gpu
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a GPU")
 def test_fast_train_and_resume_on_gpu(tiny_data):
     cuda = torch.device("cuda:0")

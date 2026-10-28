@@ -41,6 +41,7 @@ from testing import make_tiny_dataset
 SOURCE = "with_protein_information/random_splits_grouped_rxn_key"
 SPLIT = "random_splits_grouped_rxn_key/all"
 SEED = 666
+DEVICE = torch.device("cuda:0")
 HEADS = {
     "protein": "protein2latent_model",
     "text": "text2latent_model",
@@ -135,7 +136,7 @@ def precision_step(precision: str):
 
 def run_candidate(cli, split, data, out_root, weights_dir, precision):
     """train_frozen.main and evaluate.main --frozen on the cache of out_root, heads in the given precision."""
-    device = torch.device("cuda:0")
+    device = DEVICE
     record = {"loss": [], "rows": [], "sampler": None}
     real_rows, real_sampler, real_step = (
         train_frozen.epoch_rows,
@@ -163,7 +164,8 @@ def run_candidate(cli, split, data, out_root, weights_dir, precision):
         "--split", split.key, "--seed", str(SEED), "--dataset_root", str(data),
         "--out_root", str(out_root), "--weights_dir", str(weights_dir),
     ]  # fmt: skip
-    torch.cuda.reset_peak_memory_stats()
+    if DEVICE.type == "cuda":
+        torch.cuda.reset_peak_memory_stats()
     try:
         run = train_frozen.main(
             [*common, "--ec2go", str(cli.ec2go), "--epochs", str(cli.epochs), "--limit_ecs", str(cli.limit_ecs)],
@@ -175,7 +177,7 @@ def run_candidate(cli, split, data, out_root, weights_dir, precision):
             real_rows,
             real_sampler,
         )
-    peak = torch.cuda.max_memory_allocated() / 2**30
+    peak = torch.cuda.max_memory_allocated() / 2**30 if DEVICE.type == "cuda" else 0.0
     evaluate.main([*common, "--frozen", "--reference", "train"], device=device)
     sampler_ = record["sampler"]
     seen = [
@@ -196,7 +198,7 @@ def run_candidate(cli, split, data, out_root, weights_dir, precision):
 
 def run_reference(cli, tables, weights_dir, init_heads):
     """The original loop with frozen backbones. Returns step losses, drawn samples, final and best heads, predictions."""
-    device = torch.device("cuda:0")
+    device = DEVICE
     args = train_args(seed=SEED)
     original = load_original("step_01_train_CREEP")
     losses, seen = [], []

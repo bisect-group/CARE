@@ -89,3 +89,28 @@ bf16 autocast, SDPA attention and a feed-forward without the fp32 cast in ProtT5
 (ProtT5 keeps 512 because its output is a mean over all positions), and one stock Adam per parameter stepped in backward.
 It needs Ampere or newer, and excludes `--offload_adam` and `--low_memory`. `checkpoint_last.pt` keeps the per-parameter Adam states, so resume works.
 The numbers differ from the fp16 path by bf16 rounding. Tests: `test_fast_path.py`.
+
+## Verify equivalence
+
+```
+emulator_bench/verify_equivalence.sh          # CPU, about 2 minutes, no data, weights or downloads needed
+emulator_bench/verify_equivalence.sh --gpu    # also the fp16, bf16 and offload tests, needs a CUDA device
+emulator_bench/verify_equivalence.sh --negative-control  # GPU tests must FAIL, needs a CUDA device
+```
+
+Run it in the `creep` conda env (set `PYTHON` to its interpreter). The script fails if any test is skipped in CPU mode.
+It uses the synthetic split in `emulator_bench/tests/fixtures` (made by `make_fixture.py`). ProtT5 and SciBERT are tiny random
+models. A small sentencepiece model replaces the ProtT5 tokenizer. rxnfp is the real model of this repository.
+mmseqs is replaced by one cluster per sequence.
+
+- `test_equivalence_frozen.py` runs the original loop with frozen backbones and the frozen-encoder path (cache, head training,
+  ranking) on the fixture in fp32 on CPU. The sampler draws must be identical. Step losses must agree within 1e-6 relative.
+  The final heads must agree within 1e-5 relative norm. The top-10 EC lists and the EC level accuracy must be identical.
+- `test_speedups.py`, `test_fast_path.py`, `test_cache_frozen.py` and `test_train_frozen.py` compare the exact speed-ups
+  (checkpointed blocks, SDPA attention, feed-forward without the cast, padding trim, backward Adam, cached vectors) with the original code.
+- The `gpu` test in `test_equivalence_frozen.py` compares the production path (frozen encoders, heads under fp16 autocast with GradScaler, as in all recorded runs) with the original fp16 loop. A noise control reruns the production path with initial heads perturbed by 2**-11 (relative, one fp16 rounding). The per-step loss gap and the final head gap (mean absolute difference) between production and the original loop must stay within 10 times the gap the perturbation causes. Step 0 is judged like every other step: its gap must be at most 10 times its floor.
+  The EC level accuracy gap at k=1 and k=10, per level, must stay within the larger of 10 times its floor (production against the perturbed run) and one test reaction. The fixture has rows longer than the 512 token limit, so truncation and the padding trim are covered. The test prints the measured ratio (run with `-s`).
+  `--negative-control` multiplies the initial heads of the production run by 1.05. Every GPU test must then fail; the script exits 0 only if so.
+
+Not exact: fp16 runs (rounding differs from fp32), and bf16 (`--amp`, not used by any recorded run) and the offloaded Adam on GPU (tested with `--gpu`).
+`equivalence_frozen.py` prints the same comparison for real weights and real data on a GPU. It sets no tolerance.

@@ -173,6 +173,7 @@ def test_candidate_pool_defaults_to_all_proteins():
     assert queue_pipeline.parse_args([]).reference == "all"
 
 
+@pytest.mark.gpu
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a GPU")
 def test_train_step_matches_the_original_fp16_autocast_step():
     """The original loop body (autocast, six do_CL, GradScaler, Adam) on the same cached vectors."""

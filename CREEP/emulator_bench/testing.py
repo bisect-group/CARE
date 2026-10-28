@@ -23,9 +23,8 @@ from transformers import (
 
 import model_utils
 
-PROTT5_SPIECE_ID = (
-    "Rostlab/prot_t5_xl_uniref50"  # same tokenizer files as the half-precision encoder repo
-)
+FIXTURES = Path(__file__).parent / "tests" / "fixtures"
+PROTT5_SPIECE = FIXTURES / "spiece.model"  # small unigram model with the T5 special tokens and 100 extra ids
 TINY_TEXT_VOCAB = [
     "[PAD]",
     "[UNK]",
@@ -51,14 +50,13 @@ def hash_state(state: dict) -> str:
 @contextlib.contextmanager
 def tiny_backbones(vocab_dir: Path):
     """Replace ProtT5 and SciBERT by small random models with fixed weights. rxnfp stays real."""
-    real_t5_tokenizer = T5Tokenizer.from_pretrained
     vocab = Path(vocab_dir) / "vocab.txt"
     vocab.write_text("\n".join(TINY_TEXT_VOCAB) + "\n")
 
     def seeded(model):
         with torch.random.fork_rng():
             torch.manual_seed(0)
-            return model()
+            return model().eval()  # from_pretrained returns eval mode
 
     def protein_model(*a, **k):
         config = T5Config(
@@ -81,7 +79,7 @@ def tiny_backbones(vocab_dir: Path):
             mock.patch.object(
                 transformers.T5Tokenizer,
                 "from_pretrained",
-                lambda *a, **k: real_t5_tokenizer(PROTT5_SPIECE_ID, do_lower_case=False),
+                lambda *a, **k: T5Tokenizer(str(PROTT5_SPIECE), do_lower_case=False),
             )
         )
         stack.enter_context(

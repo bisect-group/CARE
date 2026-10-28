@@ -50,6 +50,7 @@ def test_checkpoint_blocks_keep_gradients():
     assert all(torch.equal(a, b) for a, b in zip(grads(False), grads(True)))
 
 
+@pytest.mark.gpu
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a GPU")
 @pytest.mark.parametrize("resident_gb", [0.0, 0.001, 1.0])
 def test_offloaded_adam_equals_adam(resident_gb):
@@ -83,6 +84,7 @@ def test_offloaded_adam_equals_adam(resident_gb):
     assert all(torch.equal(a, b) for a, b in zip(plain.parameters(), offloaded.parameters()))
 
 
+@pytest.mark.gpu
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a GPU")
 @pytest.mark.parametrize("resident_gb", [0.0, 0.001])
 def test_offloaded_adam_continues_equally_after_state_dict_reload(resident_gb):

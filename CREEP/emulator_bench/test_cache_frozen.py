@@ -16,9 +16,9 @@ from transformers import (
 
 import cache_frozen
 from cache_frozen import Store, encode, split_entities, text_key
-from common import DEFAULT_OUT_ROOT, train_args
-from model_utils import PROTEIN_HUB_ID, load_reaction_tokenizer
-from testing import TINY_TEXT_VOCAB
+from common import train_args
+from model_utils import load_reaction_tokenizer
+from testing import PROTT5_SPIECE, TINY_TEXT_VOCAB
 
 CPU = torch.device("cpu")
 FINGERPRINT = {"model": "m", "recipe": "r"}
@@ -118,15 +118,7 @@ def test_reaction_vectors_equal_the_untrimmed_original():
 
 
 def test_protein_vectors_equal_the_original_mean_over_all_positions():
-    try:
-        tokenizer = T5Tokenizer.from_pretrained(
-            PROTEIN_HUB_ID,
-            do_lower_case=False,
-            cache_dir=str(DEFAULT_OUT_ROOT / "pretrained" / "pretrained_ProtT5"),
-            local_files_only=True,
-        )
-    except OSError:
-        pytest.skip("needs the cached ProtT5 tokenizer")
+    tokenizer = T5Tokenizer(str(PROTT5_SPIECE), do_lower_case=False)
     torch.manual_seed(0)
     model = T5EncoderModel(
         T5Config(vocab_size=128, d_model=64, d_ff=128, d_kv=16, num_layers=2, num_heads=4)
