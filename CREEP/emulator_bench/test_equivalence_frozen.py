@@ -42,7 +42,7 @@ def add_long_rows(data) -> None:
 
 
 def run_both(tmp_path_factory, mode: str, device: torch.device, heads: str, noise: bool = False, scale: float = 1.0):
-    """Returns the reference, the candidate (initial heads times `scale`) and, with `noise`, the candidate rerun from perturbed initial heads."""
+    """Returns the reference, the candidate (initial heads times `scale`) and, with `noise`, the candidate rerun from perturbed initial heads and the unscaled candidate (the noise floor baseline)."""
     work = tmp_path_factory.mktemp(mode)
     cli = Namespace(mode=mode, ec2go=FIXTURES / "ec2go", epochs=EPOCHS, limit_ecs=LIMIT_ECS)
     with pytest.MonkeyPatch.context() as patch, tiny_backbones(work):
@@ -85,8 +85,9 @@ def run_both(tmp_path_factory, mode: str, device: torch.device, heads: str, nois
                 patch.setattr(train_frozen, "make_heads", real_make_heads)
 
         candidate = candidate_run("out_candidate", False, scale)
+        clean = candidate_run("out_candidate_clean", False) if scale != 1.0 else candidate
         noisy = candidate_run("out_candidate_noise", True) if noise else None
-    return reference, candidate, noisy
+    return reference, candidate, noisy, clean
 
 
 @pytest.fixture(scope="module")
@@ -132,21 +133,21 @@ def test_production_fp16_within_noise_control(tmp_path_factory):
     """Production precision: original fp16 autocast loop against the cache (fp16 autocast, SDPA, trimmed) and fp16 heads.
 
     A noise control reruns the production path with the initial heads perturbed by 2**-11 (relative, one fp16 rounding).
-    Floor = |perturbed production - production|, gap = |production - original|. The per-step loss gap and the gap of the
+    Floor = |perturbed production - unscaled production|, gap = |production - original|. The per-step loss gap and the gap of the
     final heads (mean absolute difference) must stay within K times the floor. Step 0 is judged like every other step.
     The EC level accuracy gap at k=1 and k=10, per level, must stay within max(K times its floor, one test reaction).
     The fixture has rows longer than the 512 token limit. With EQUIV_NEGATIVE_CONTROL=1 the production initial heads
     are multiplied by 1.05 and the test must fail.
     """
-    reference, candidate, noise = run_both(
+    reference, candidate, noise, clean = run_both(
         tmp_path_factory, "production", torch.device("cuda:0"), "fp16", noise=True,
         scale=1.05 if NEGATIVE_CONTROL else 1.0,
     )
     ref = reference["losses"]
-    gap, floor = np.abs(candidate["losses"] - ref), np.abs(noise["losses"] - candidate["losses"])
+    gap, floor = np.abs(candidate["losses"] - ref), np.abs(noise["losses"] - clean["losses"])
     tiny = 1e-7 * np.abs(ref).max()
     final_gap = mean_head_difference(candidate["final"], reference["final"])
-    final_floor = mean_head_difference(noise["final"], candidate["final"])
+    final_floor = mean_head_difference(noise["final"], clean["final"])
     final_tiny = 1e-7 * float(np.mean([v.abs().mean().item() for m in reference["final"].values() for v in m.values()]))
     tiny0 = 1e-7 * abs(ref[0])
     gap0, floor0 = gap[0], floor[0]
@@ -159,9 +160,10 @@ def test_production_fp16_within_noise_control(tmp_path_factory):
     assert gap.max() <= K * max(floor.max(), tiny)
     assert final_gap <= K * max(final_floor, final_tiny)
     ref_acc, cand_acc, noise_acc = (ec_level_accuracy(x["predictions"]) for x in (reference, candidate, noise))
+    clean_acc = ec_level_accuracy(clean["predictions"])
     one_row = 100 / len(reference["predictions"])
     for k in ("k=1", "k=10"):
         for level, value in ref_acc[k].items():
-            acc_gap, acc_floor = abs(cand_acc[k][level] - value), abs(noise_acc[k][level] - cand_acc[k][level])
+            acc_gap, acc_floor = abs(cand_acc[k][level] - value), abs(noise_acc[k][level] - clean_acc[k][level])
             print(f"creep fp16 {k} {level}: accuracy gap={acc_gap:.2f}, floor={acc_floor:.2f}")
             assert acc_gap <= max(K * acc_floor, one_row), (k, level)
