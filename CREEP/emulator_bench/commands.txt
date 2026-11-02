@@ -23,7 +23,7 @@ $PY CREEP/emulator_bench/queue_pipeline.py --gpus 0 1 2 --runs_per_gpu 1
 
 # Frozen encoders (user decision 2026-10-24: ProtT5, SciBERT and rxnfp are not fine-tuned; only the three heads train).
 #    Step 1 caches each unique sequence, reaction and EC text once (resumable, fp32). Several GPUs: one shard per GPU.
-#    Step 2 trains the heads on the cached vectors and evaluates. Results go to $OUT/enzyme_retrieval_frozen.
+#    Step 2 trains the heads on the cached vectors and evaluates. Results go to $OUT/enzyme_retrieval.
 $PY CREEP/emulator_bench/queue_pipeline.py --frozen --gpus 0 1 2 --runs_per_gpu 2
 #    Cache only (one process per GPU, here two shards):
 #    CUDA_VISIBLE_DEVICES=0 $PY CREEP/emulator_bench/cache_frozen.py --shard 0 --shards 2
@@ -31,7 +31,7 @@ $PY CREEP/emulator_bench/queue_pipeline.py --frozen --gpus 0 1 2 --runs_per_gpu 
 #    One split and one seed by hand:
 #    $PY CREEP/emulator_bench/train_frozen.py --split random_splits_grouped_rxn_key/all --seed 666
 #    $PY CREEP/emulator_bench/evaluate.py --frozen --split random_splits_grouped_rxn_key/all --seed 666
-#    Summary: $PY CREEP/emulator_bench/aggregate_results.py --frozen
+#    Summary: $PY CREEP/emulator_bench/aggregate_results.py
 #    Equivalence of the frozen path with the original code (backbones frozen), one visible GPU:
 #    CUDA_VISIBLE_DEVICES=1 $PY CREEP/emulator_bench/equivalence_frozen.py --mode fp32 --work_dir /tmp/creep_frozen_equiv
 #    CUDA_VISIBLE_DEVICES=1 $PY CREEP/emulator_bench/equivalence_frozen.py --mode production --heads fp16 --max_gb 20 --work_dir /tmp/creep_frozen_equiv

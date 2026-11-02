@@ -67,11 +67,11 @@ The two facilitators have `alpha_generative = 0`, so they do nothing and are ski
   SciBERT and rxnfp batches are sorted by length and cut to the longest sequence.
 - `train_frozen.py` keeps the cached vectors on the GPU. The sampler subclasses the original `CREEPDatasetMineBatch` and makes the same draws
   (batch 16, one step per full EC per epoch, 40 epochs). Loss: the original `do_CL` over six pairs (accuracy kept as a tensor, no per-step sync).
-  Adam has the original learning rates (text x0.1). The heads run under fp16 autocast with a GradScaler (new each epoch), as in the original loop; `evaluate.py --frozen` projects under fp16 autocast like the original `extract()`. Output: `enzyme_retrieval_frozen/<split>/seed_<s>/`
+  Adam has the original learning rates (text x0.1). The heads run under fp16 autocast with a GradScaler (new each epoch), as in the original loop; `evaluate.py --frozen` projects under fp16 autocast like the original `extract()`. Output: `enzyme_retrieval/<split>/seed_<s>/`
   (`bestmodel.pth` and `lastmodel.pth` hold the heads only; `checkpoint_last.pt` resumes).
 - `evaluate.py --frozen` projects cached reference-protein and test-reaction vectors through the heads, then ranks as before.
 - `queue_pipeline.py --frozen --gpus ... --runs_per_gpu N` runs the cache (one shard per GPU), then training and evaluation of every run.
-- `aggregate_results.py --frozen` summarizes `enzyme_retrieval_frozen`.
+- `aggregate_results.py` summarizes `enzyme_retrieval`.
 - `equivalence_frozen.py` compares this path with the original code whose backbones are frozen.
   Tests: `test_cache_frozen.py`, `test_train_frozen.py`.
 

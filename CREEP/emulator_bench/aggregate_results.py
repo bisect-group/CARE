@@ -10,15 +10,13 @@ import pandas as pd
 
 from common import DEFAULT_OUT_ROOT, TASK, atomic_write_text
 from metrics import LEVELS, ec_level_accuracy
-from train_frozen import FROZEN_TASK
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--out_root", type=Path, default=DEFAULT_OUT_ROOT)
-    p.add_argument("--frozen", action="store_true", help="summarize the frozen-encoder runs")
     cli = p.parse_args()
-    root = cli.out_root / (FROZEN_TASK if cli.frozen else TASK)
+    root = cli.out_root / TASK
     rows = []
     for path in sorted(root.glob("**/seed_*/predictions.parquet")):
         group_name, seed = (

@@ -23,6 +23,7 @@ from cache_frozen import fingerprints, open_stores
 from common import (
     DEFAULT_DATASET_ROOT,
     DEFAULT_OUT_ROOT,
+    TASK,
     Split,
     build_tables,
     discover_splits,
@@ -33,12 +34,11 @@ from model_utils import seed_everything
 from train import atomic_save, rng_state, set_rng_state
 from CREEP.datasets import CREEPDatasetMineBatch  # noqa: E402
 
-FROZEN_TASK = "enzyme_retrieval_frozen"
 LOG_EVERY = 1000
 
 
 def frozen_run_dir(split: Split, out_root: Path, seed: int) -> Path:
-    return Path(out_root) / FROZEN_TASK / split.group / split.name / f"seed_{seed}"
+    return Path(out_root) / TASK / split.group / split.name / f"seed_{seed}"
 
 
 class RowSampler(CREEPDatasetMineBatch):
